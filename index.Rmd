@@ -1,0 +1,88 @@
+---
+title: "Course Project for Practical Machine Learning"
+author: "Ming-Lun Ho"
+date: "December 21, 2015"
+output: html_document
+---
+
+## Background
+
+We use the data collected by [Velloso et al.](http://groupware.les.inf.puc-rio.br/work.jsf?p1=11201) to demonstrate machine learning. The data consist of telemetries from four body sensors on six subjects doing the Unilateral Dumbbell Bicept Curl exercise in five different manners (the correct execution and four common mistakes), each manner with ten repetitions. We want to use machine learning to predict the manner by which the exercise is done based on sensor telemetries at a moment in time while a participant is doing the exercise. 
+
+## Data Processing
+
+The assignment does not appear to use the data in the same manner as the original study to predict the manner in which participants did the exercise. As such, none of variable columns that are summary statistics over a time interval are imported. Only the raw telemetries of the sensors, the participant identifier, and the manner of the exercise are imported.
+
+```{r LoadLibsFiles, cache=TRUE, results='hide'}
+# loading required libaries and getting data files
+require(caret)
+require(randomForest)
+if (!file.exists("pml-training.csv")) {
+    trainingURL = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+    download.file(trainingURL, destfile = "pml-training.csv")
+}
+if (!file.exists("pml-testing.csv")) {
+    testingURL = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+    download.file(testingURL, destfile = "pml-testing.csv")
+}
+```
+
+```{r Data_Proc, results='hide', cache=TRUE}
+# Set up colClasses to NULL (columns not read)
+# Then add class type matching the column to read from file.
+colClasses = rep("NULL",160)
+colClasses[2] = "factor"     # user_name
+colClasses[160] = "factor"   # classe = manner of exercise
+numMask = c(8:11, 37:49, 60:68, 84:86, 102, 113:124,
+            140, 151:159)    # original sensor telemetry
+for (i in 1:length(numMask)) 
+    colClasses[numMask[i]] = "numeric"
+pml <- read.csv("pml-training.csv", 
+                colClasses = colClasses)
+pml$user_name <- as.integer(pml$user_name)
+```
+
+## Training and Cross Validating the Model
+
+The 60% of the available data set is used for training the predictive model, and rest is reserved for cross validation testing. 
+
+Without the discipline knowledge about the telemetry gathered by the sensors, I really have no clue as to where to start in selecting the variables most suitable for training. Thus, to start, I used all 53 potential predictor variables. At first I used `train()` from the caret package to implement the random forest algorithm; however, the code ran for 5 hours without completing the algorithm. I then use `randomForest()` from the randomForest package, which took less than 2 minutes to complete.
+
+``` {r training, results='hide', cache=TRUE}
+# Training the model using random forest.
+set.seed(1234)  
+inTrain <- createDataPartition(y=pml$classe,
+                                p = 0.60, list=FALSE)
+training <- pml[inTrain,]
+testing <- pml[-inTrain,]
+modFit <- randomForest(x=training[,-54], y=training$classe)
+```
+
+``` {r OOB_err_rate, results='hide', cache=TRUE}
+# This calculates the out of bag estimate of error rate using
+# the model on the training set.
+temp = 0
+m <- modFit$confusion
+for(i in 1:5) {
+    temp = temp + sum(m[i,1:5])*m[i,6]
+}
+OOB.err.rate = temp / sum(m[1:5,1:5])
+```
+
+```{r testing, results='hide', cache=TRUE}
+# Applying the model to the testing set.
+pred <- predict(modFit, testing)
+cm <- confusionMatrix(pred,testing$classe)
+```
+
+## Analyzing the Model
+
+The confusion matrix for the training set reveals that the out-of-bag error is very low at `r round(OOB.err.rate*100,2)`%, which we can use as estimate for out of sample error rate. Also, the sensitivities to the different manners of exercise is very high, the minimum of which is `r round((1-max(m[,"class.error"]))*100,2)`%. 
+
+When the model is cross validated on the testing set, we see an out of sample error rate of `r round(100*(1-cm$overall["Accuracy"]),2)`% and high sensitivity to the different manners of exercise, the minimum of which is `r round(min(cm$byClass[,"Sensitivity"])*100,2)`%.
+
+Thus, the testing set cross validated the training set well.
+
+# Conclusion
+
+With the high class sensitivities and low out of sample error rate for both the training and testing sets, we expect the model to do well on the 20 test cases. Indeed, after submitting the results from using `set.seed(1234)`, all 20 predictions are accurate.
