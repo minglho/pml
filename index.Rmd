@@ -77,6 +77,8 @@ cm <- confusionMatrix(pred,testing$classe)
 
 ## Analyzing the Model
 
+> Note: Rather than just displaying R output which non-technical readers don't care, I am practicing embedding only relevant R output in my narrative. You can see in index.Rmd that I have code written to show that my R code runs; I am not just typing in numbers in the narrative below.
+
 The confusion matrix for the training set reveals that the out-of-bag error is very low at `r round(OOB.err.rate*100,2)`%, which we can use as estimate for out of sample error rate. Also, the sensitivities to the different manners of exercise is very high, the minimum of which is `r round((1-max(m[,"class.error"]))*100,2)`%. 
 
 When the model is cross validated on the testing set, we see an out of sample error rate of `r round(100*(1-cm$overall["Accuracy"]),2)`% and high sensitivity to the different manners of exercise, the minimum of which is `r round(min(cm$byClass[,"Sensitivity"])*100,2)`%.
